@@ -1,0 +1,23 @@
+# ---- Data (never commit the Kaggle dataset or generated predictions) ----
+src/data/*
+!src/data/.gitkeep
+
+# ---- OS / editor files ----
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.ipynb_checkpoints/
+
+# ---- R ----
+.Rhistory
+.RData
+.Rproj.user/
+*.Rproj
