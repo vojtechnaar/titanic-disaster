@@ -177,9 +177,16 @@ main <- function() {
 
   folds <- sample(rep(1:5, length.out = nrow(train)))
   cv_scores <- sapply(1:5, function(k) {
-    fit <- glm(model_formula, data = train[folds != k, ], family = binomial)
-    mean(predict_class(fit, train[folds == k, ]) == train$Survived[folds == k])
+    fold_raw <- train_raw[folds != k, ]
+    fold_fill <- learn_fill_values(fold_raw)
+    invisible(capture.output({
+      fold_train <- prepare(fold_raw, fold_fill, "fold train")
+      fold_valid <- prepare(train_raw[folds == k, ], fold_fill, "fold validation")
+    }))
+    fit <- glm(model_formula, data = fold_train, family = binomial)
+    mean(predict_class(fit, fold_valid) == fold_valid$Survived)
   })
+  cat("Cross-validation relearns imputation within each training fold.\n")
   cat(sprintf("\nTraining accuracy:               %.4f\n", train_acc))
   cat(sprintf("5-fold cross-validated accuracy: %.4f (+/- %.4f)\n", mean(cv_scores), sd(cv_scores)))
 
@@ -201,7 +208,7 @@ main <- function() {
   test_acc <- NULL
   if ("Survived" %in% names(test_raw)) {
     test_acc <- mean(predictions == test_raw$Survived)
-    label <- "true labels"
+    label <- "Test accuracy (true labels)"
   } else {
     cat("test.csv has no 'Survived' column: Kaggle keeps the true test labels hidden.\n")
     reference_path <- file.path(data_dir, "gender_submission.csv")
@@ -209,21 +216,21 @@ main <- function() {
       reference <- read_csv(reference_path, show_col_types = FALSE)
       merged <- inner_join(submission, reference, by = "PassengerId", suffix = c("_pred", "_ref"))
       test_acc <- mean(merged$Survived_pred == merged$Survived_ref)
-      label <- "gender_submission.csv"
+      label <- "Sample-baseline agreement (not test accuracy)"
       cat("Using gender_submission.csv (Kaggle's sample answer: all women survive, all men die)\n")
-      cat("as the reference labels for the test set.\n")
+      cat("for baseline agreement only; true test accuracy is unavailable.\n")
     } else {
       cat("gender_submission.csv not found either, so test accuracy cannot be computed.\n")
     }
   }
-  if (!is.null(test_acc)) cat(sprintf("\nTest accuracy (vs %s): %.4f\n", label, test_acc))
+  if (!is.null(test_acc)) cat(sprintf("\n%s: %.4f\n", label, test_acc))
   cat(sprintf("For the official score, upload %s to the Kaggle competition.\n", basename(output_file)))
 
   # ------------------------------------------------------------- summary
   banner("SUMMARY")
   cat(sprintf("Training accuracy:               %.4f\n", train_acc))
   cat(sprintf("5-fold cross-validated accuracy: %.4f\n", mean(cv_scores)))
-  if (!is.null(test_acc)) cat(sprintf("Test accuracy (vs %s): %.4f\n", label, test_acc))
+  if (!is.null(test_acc)) cat(sprintf("%s: %.4f\n", label, test_acc))
   cat(sprintf("Predictions file:                %s\n", output_file))
 }
 
