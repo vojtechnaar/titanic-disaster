@@ -9,7 +9,7 @@ This repository predicts which passengers survived the sinking of the Titanic (A
 | `titanic-r` | R 4.4.2 | `glm(family = binomial)` | [`src/r/`](src/r) |
 
 Each script loads the Kaggle data, explores it, cleans it and engineers features, trains the model,
-reports training accuracy, predicts on the test set, reports test accuracy, and saves the predictions.
+reports training and cross-validation accuracy, predicts on the test set, reports sample-baseline agreement, and saves the predictions.
 **Every step prints what it is doing**, so the whole analysis can be followed in the terminal without
 opening the code.
 
@@ -67,7 +67,7 @@ The scripts expect these three files from the Kaggle Titanic competition inside 
 ```
 src/data/train.csv               # 891 passengers, includes the Survived column
 src/data/test.csv                # 418 passengers, no Survived column
-src/data/gender_submission.csv   # Kaggle's sample submission (used as test-set reference labels)
+src/data/gender_submission.csv   # Kaggle's sample submission (baseline predictions, not true labels)
 ```
 
 The `src/data/` folder already exists in the repository (it is empty and git-ignored).
@@ -172,7 +172,7 @@ Both scripts print the same five steps to the terminal:
 | 2. Clean & engineer features | one line per change, each with a count of rows affected (see the table below) |
 | 3. Train logistic regression | features used, model coefficients, **training accuracy**, 5-fold cross-validated accuracy |
 | 4. Predict on `test.csv` | the same cleaning steps applied to the test set, number of predicted survivors |
-| 5. Test-set accuracy | **test accuracy**, followed by a final summary |
+| 5. Test-set evaluation | explains hidden labels, prints sample-baseline agreement, followed by a final summary |
 
 Both runs also save their predictions in Kaggle's submission format (`PassengerId,Survived`):
 
@@ -185,13 +185,14 @@ Both runs also save their predictions in Kaggle's submission format (`PassengerI
 |---|---|---|
 | Training accuracy | 0.8395 | 0.8384 |
 | 5-fold cross-validated accuracy | 0.8350 | 0.8339 |
-| Test accuracy (vs `gender_submission.csv`) | 0.9187 | 0.9187 |
+| Sample-baseline agreement (not test accuracy) | 0.9187 | 0.9187 |
 
 > **About test accuracy:** Kaggle hides the true `Survived` labels for `test.csv`. The scripts measure
-> test accuracy against `gender_submission.csv`, Kaggle's sample answer in which every woman survives
+> agreement with `gender_submission.csv`, Kaggle's sample answer in which every woman survives
 > and every man dies. That number shows how closely the model agrees with this simple baseline. It is
-> not the true accuracy. The 5-fold cross-validated accuracy on the training data is the honest
-> estimate of performance on unseen passengers. To get the official score, upload
+> not the true accuracy. The 5-fold cross-validated accuracy estimates performance on unseen passengers. Imputation
+> values are learned separately within each training fold (and Python scaling is also fitted within each fold).
+> True test accuracy cannot be computed locally without the hidden labels; sample predictions cannot substitute for them. To get the official score, upload
 > `predictions_python.csv` or `predictions_r.csv` to the
 > [competition's Submit page](https://www.kaggle.com/competitions/titanic/submissions).
 
@@ -269,3 +270,12 @@ Changes went `feature/titanic-model` → `develop` → `main` through pull reque
 | Windows: `invalid reference format` or the mount is empty | Use the PowerShell or cmd variant of the `docker run` command above, not the `$(pwd)` one. |
 | Kaggle returns `403 Forbidden` | You have not accepted the competition rules. Open the competition page and click **Join Competition**. |
 | R build seems slow on a Mac | Expected on Apple Silicon (packages compile from source). Only the first build is slow. |
+
+## Assignment submission
+
+Submit only this public repository URL: <https://github.com/vojtechnaar/titanic-disaster>.
+The homework explicitly requests a GitHub link rather than a ZIP and prohibits including the dataset.
+The grader downloads the Kaggle data using Step 2, then runs both Docker containers. Generated
+prediction CSVs remain in the ignored data folder; they are not extra assignment attachments.
+Kaggle submission is optional for obtaining an official hidden-test score; the homework does not
+explicitly require a Kaggle upload or screenshot.

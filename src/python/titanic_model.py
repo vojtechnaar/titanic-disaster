@@ -11,6 +11,8 @@ the terminal output alone:
   5. Measure test-set accuracy and save the predictions
 """
 
+import contextlib
+import io
 import os
 import sys
 from pathlib import Path
@@ -18,7 +20,7 @@ from pathlib import Path
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
-from sklearn.model_selection import StratifiedKFold, cross_val_score
+from sklearn.model_selection import StratifiedKFold
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
@@ -178,7 +180,20 @@ def main():
 
     train_acc = accuracy_score(y_train, model.predict(X_train))
     cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
-    cv_scores = cross_val_score(model, X_train, y_train, cv=cv)
+    cv_scores = []
+    for fit_idx, validation_idx in cv.split(train_raw, y_train):
+        fold_raw = train_raw.iloc[fit_idx]
+        fold_fill = learn_fill_values(fold_raw)
+        # Keep the terminal readable; the full-data transformations are printed above.
+        with contextlib.redirect_stdout(io.StringIO()):
+            fold_train = prepare(fold_raw, fold_fill, "fold train")
+            fold_valid = prepare(train_raw.iloc[validation_idx], fold_fill, "fold validation")
+        fold_model = make_pipeline(StandardScaler(), LogisticRegression(max_iter=1000))
+        fold_model.fit(fold_train.drop(columns="Survived"), fold_train["Survived"])
+        cv_scores.append(accuracy_score(
+            fold_valid["Survived"], fold_model.predict(fold_valid.drop(columns="Survived"))))
+    cv_scores = pd.Series(cv_scores)
+    print("Cross-validation relearns imputation and scaling within each training fold.")
     print(f"\nTraining accuracy:               {train_acc:.4f}")
     print(f"5-fold cross-validated accuracy: {cv_scores.mean():.4f} (+/- {cv_scores.std():.4f})")
 
@@ -200,7 +215,7 @@ def main():
     test_acc = None
     if "Survived" in test_raw.columns:
         test_acc = accuracy_score(test_raw["Survived"], predictions)
-        label = "true labels"
+        label = "Test accuracy (true labels)"
     else:
         print("test.csv has no 'Survived' column: Kaggle keeps the true test labels hidden.")
         reference_path = DATA_DIR / "gender_submission.csv"
@@ -208,13 +223,13 @@ def main():
             reference = pd.read_csv(reference_path)
             merged = submission.merge(reference, on="PassengerId", suffixes=("_pred", "_ref"))
             test_acc = (merged["Survived_pred"] == merged["Survived_ref"]).mean()
-            label = "gender_submission.csv"
+            label = "Sample-baseline agreement (not test accuracy)"
             print("Using gender_submission.csv (Kaggle's sample answer: all women survive, all men die)")
-            print("as the reference labels for the test set.")
+            print("for baseline agreement only; true test accuracy is unavailable.")
         else:
             print("gender_submission.csv not found either, so test accuracy cannot be computed.")
     if test_acc is not None:
-        print(f"\nTest accuracy (vs {label}): {test_acc:.4f}")
+        print(f"\n{label}: {test_acc:.4f}")
     print(f"For the official score, upload {OUTPUT_FILE.name} to the Kaggle competition.")
 
     # --------------------------------------------------------------- summary
@@ -222,7 +237,7 @@ def main():
     print(f"Training accuracy:               {train_acc:.4f}")
     print(f"5-fold cross-validated accuracy: {cv_scores.mean():.4f}")
     if test_acc is not None:
-        print(f"Test accuracy (vs {label}): {test_acc:.4f}")
+        print(f"{label}: {test_acc:.4f}")
     print(f"Predictions file:                {OUTPUT_FILE}")
 
 
